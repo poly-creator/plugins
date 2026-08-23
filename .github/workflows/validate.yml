@@ -1,0 +1,66 @@
+# Registry validation — runs on every PR that touches plugins.json.
+#
+# Eight machine gates (see scripts/validate-registry.mjs) so a human only
+# reviews code semantics (REVIEW.md):
+#   1. plugins.json parses + passes REGISTRY_SCHEMA
+#   2. ids unique
+#   3. diff additive-only (no modifying others' entries)
+#   4. GitHub repo/tag/asset all exist
+#   5. downloaded asset hashes to the pinned sha256 (tamper-evidence)
+#   6. zip manifest passes MARKETPLACE_MANIFEST_SCHEMA + id/version match
+#   7. openclime-plugin-pack --check re-validates the unpacked plugin
+#   8. nodeEntry entries are flagged needs-manual-review
+name: Validate
+
+on:
+  pull_request:
+    paths: ["plugins.json"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+        env:
+          # plugin-manifest + plugin-pack come from the public registry;
+          # no token needed for public packages.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Run validation
+        id: validate
+        run: |
+          node scripts/validate-registry.mjs plugins.json --pr "${{ github.event.pull_request.number }}"
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+        env:
+          REGISTRY_REPO: ${{ github.repository }}
+
+      - name: Flag nodeEntry entries for manual review
+        if: steps.validate.outputs.status == '2'
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" --body \
+            "⚠️ 该 PR 声明了 nodeEntry(主进程入口) — 需要人工代码审查,见 REVIEW.md。"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Post failure comment
+        if: failure()
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" --body \
+            "❌ 机器校验未通过。见 Actions 日志定位失败门(validate-registry.mjs 的 [1]-[8])。"
+        env:
+          GH_TOKEN: ${{ github.token }}
