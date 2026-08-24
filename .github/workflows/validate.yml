@@ -1,0 +1,75 @@
+# Registry validation — the machine half of the review (REVIEW.md is the human half).
+#
+# Exit-code contract with scripts/validate-registry.mjs:
+#   0 = all gates green → merge-able after human review
+#   1 = a gate failed   → the check FAILS, the PR needs fixes
+#   2 = gates green but an entry declares nodeEntry → the check PASSES and the
+#       PR is labeled `needs-manual-review` (main-process code is full-trust —
+#       REVIEW.md "Must review" section applies)
+name: validate
+
+on:
+  pull_request:
+    paths:
+      - "plugins.json"
+      - "scripts/**"
+      - "vendor/**"
+      - ".github/workflows/validate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "plugins.json"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm install --no-fund --no-audit
+
+      - name: Validate registry
+        id: validate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          ARGS=""
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            ARGS="--pr ${PR_NUMBER}"
+          fi
+          set +e
+          node scripts/validate-registry.mjs $ARGS plugins.json
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # 0 and 2 are acceptable outcomes; anything else fails the check.
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
+            exit "$code"
+          fi
+
+      - name: Label needs-manual-review (nodeEntry present)
+        if: github.event_name == 'pull_request' && steps.validate.outputs.code == '2'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create needs-manual-review --color D93F0B --description "Declares nodeEntry — full main-process trust, read the code" || true
+          gh pr edit "${{ github.event.pull_request.number }}" --add-label needs-manual-review
+
+      - name: Unlabel needs-manual-review (no nodeEntry)
+        if: github.event_name == 'pull_request' && steps.validate.outputs.code == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit "${{ github.event.pull_request.number }}" --remove-label needs-manual-review || true

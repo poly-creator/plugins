@@ -28,11 +28,9 @@
  *   REGISTRY_REPO=owner/plugins validate-registry.mjs <path-to-plugins.json>
  *   REGISTRY_REPO=owner/plugins validate-registry.mjs --pr <pr-number>
  */
-import { readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import { unzipSync, strToU8 } from "fflate";
 import {
@@ -44,7 +42,15 @@ import {
 
 const API = "https://api.github.com";
 const UA = "openclime-plugins-registry/1.0";
-const HEADERS = { "User-Agent": UA, Accept: "application/vnd.github+json" };
+const HEADERS = {
+	"User-Agent": UA,
+	Accept: "application/vnd.github+json",
+	// CI passes GITHUB_TOKEN (60 req/h unauthenticated would not survive
+	// per-entry repo/release/asset checks).
+	...(process.env.GITHUB_TOKEN
+		? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
+		: {}),
+};
 
 function die(msg, code = 1) {
 	console.error(`validate-registry: ${msg}`);
@@ -105,22 +111,21 @@ async function verifyEntryAsset(entry) {
 	}
 
 	// Gate 7: pack --check against the unpacked plugin. Write to temp so the
-	// shared CLI validates the exact bytes CI just verified.
+	// shared CLI validates the exact bytes CI just verified. runCli is called
+	// programmatically (not via node_modules/.bin) — the bin shim is a shell
+	// script, unspawnable through process.execPath, and the package is a
+	// symlinked `file:` install anyway.
 	const tmp = await mkdtemp(path.join(os.tmpdir(), "registry-verify-"));
 	try {
 		for (const [name, data] of Object.entries(files)) {
 			const abs = path.join(tmp, name);
-			await import("node:fs/promises").then(({ mkdir, writeFile }) =>
-				mkdir(path.dirname(abs), { recursive: true }).then(() => writeFile(abs, data)),
-			);
+			await mkdir(path.dirname(abs), { recursive: true });
+			await writeFile(abs, data);
 		}
-		const pack = spawnSync(
-			process.execPath,
-			[path.join(path.dirname(new URL(import.meta.url).pathname), "../../node_modules/.bin/openclime-plugin-pack"), tmp, "--check"],
-			{ encoding: "utf8" },
-		);
-		if (pack.status !== 0) {
-			throw new Error(`[7] openclime-plugin-pack --check failed: ${pack.stderr || pack.stdout}`);
+		const { runCli } = await import("@openclime/plugin-pack");
+		const code = await runCli([tmp, "--check"]);
+		if (code !== 0) {
+			throw new Error(`[7] openclime-plugin-pack --check failed for ${entry.id} (see stderr above)`);
 		}
 	} finally {
 		await rm(tmp, { recursive: true, force: true });
@@ -177,15 +182,35 @@ async function main() {
 			: { plugins: [] };
 		const baseIds = new Map(base.plugins.map((p) => [p.id, p]));
 		const headIds = new Map(head.plugins.map((p) => [p.id, p]));
+		// Ownership = the PR AUTHOR's login, not pr.head.repo.full_name —
+		// PRs come from forks, so the fork's full_name never equals the
+		// plugin repo an entry points at; comparing them rejects every
+		// legitimate external update. What we actually require: every
+		// plugin repo an entry touches belongs to the submitter.
+		const submitter = pr.user.login;
+		const ownerOf = (entry) => entry.repo.split("/")[0];
 		for (const [id, headEntry] of headIds) {
 			const baseEntry = baseIds.get(id);
-			if (!baseEntry) continue; // new entry — fine
-			// Modified entry: only the owning repo may change it.
+			if (!baseEntry) {
+				// New entry: the submitter must own the plugin repo it pins.
+				if (ownerOf(headEntry) !== submitter) {
+					die(`[3] new entry "${id}" pins ${headEntry.repo} but PR is from @${submitter} — you may only submit entries for repos you own`);
+				}
+				continue;
+			}
+			// Modified entry: no repo swap, and only the owning repo's author
+			// may change it.
 			if (headEntry.repo !== baseEntry.repo) {
 				die(`[3] entry "${id}" changed repo (${baseEntry.repo} → ${headEntry.repo}) — modifying others' entries is not allowed`);
 			}
-			if (headEntry.repo !== pr.head.repo.full_name) {
-				die(`[3] entry "${id}" belongs to ${baseEntry.repo} but PR is from ${pr.head.repo.full_name}`);
+			if (ownerOf(baseEntry) !== submitter) {
+				die(`[3] entry "${id}" belongs to ${baseEntry.repo} but PR is from @${submitter} — modifying others' entries is not allowed`);
+			}
+		}
+		// Removals follow the same rule: you may only remove your own entries.
+		for (const [id, baseEntry] of baseIds) {
+			if (!headIds.has(id) && ownerOf(baseEntry) !== submitter) {
+				die(`[3] PR removes "${id}" (repo ${baseEntry.repo}) owned by @${ownerOf(baseEntry)} — PR is from @${submitter}`);
 			}
 		}
 	}
@@ -203,10 +228,11 @@ async function main() {
 
 		const { nodeEntry } = await verifyEntryAsset(entry);
 
-		// Gate 8: nodeEntry ⇒ manual review required.
+		// Gate 8: nodeEntry ⇒ manual review required. Exit code 2 (not 1) —
+		// validate.yml treats it as "label needs-manual-review", not failure.
 		if (nodeEntry) {
 			console.log(`[8] ${entry.id} declares nodeEntry — requires manual review`);
-			process.exitCode = process.exitCode ?? 2;
+			process.exitCode = 2;
 		}
 	}
 

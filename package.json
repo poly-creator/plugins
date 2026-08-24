@@ -1,0 +1,19 @@
+{
+	"name": "openclime-plugin-registry",
+	"private": true,
+	"version": "1.0.0",
+	"type": "module",
+	"description": "Official registry of third-party OpenClime plugins — plugins.json + CI validation gates.",
+	"scripts": {
+		"validate": "node scripts/validate-registry.mjs plugins.json"
+	},
+	"dependencies": {
+		"@openclime/plugin-manifest": "file:./vendor/plugin-manifest",
+		"@openclime/plugin-pack": "file:./vendor/plugin-pack",
+		"fflate": "^0.8.2",
+		"zod": "^4.4.3"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	}
+}

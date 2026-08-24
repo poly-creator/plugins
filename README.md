@@ -4,17 +4,16 @@ The official manifest of **third-party** OpenClime plugins distributed
 Obsidian-style: one plugin = one GitHub repo, bytes hosted on the author's own
 release, this repo pins the exact zip + its SHA-256 at review time.
 
-Official first-party plugins do NOT live here — they're built in the
-`openclime/openclime` monorepo and seeded via the D1 pipeline (the web catalog
-merges both sources).
+Official first-party plugins do NOT live here — they're built in the OpenClime
+monorepo and seeded via the D1 pipeline (the web catalog merges both sources).
 
 ## How to publish your plugin
 
-1. **Build + release it.** Fork
-   [`openclime/plugin-template`](https://github.com/openclime/plugin-template)
-   and follow its README: `git tag v0.1.0 && git push origin v0.1.0` produces a
-   GitHub Release with `<id>-<version>.zip` attached and prints the zip's
-   `sha256`.
+1. **Build + release it.** Use the
+   [`bingryan/plugin-template`](https://github.com/bingryan/plugin-template)
+   template repo and follow its README: `git tag v0.1.0 && git push origin
+   v0.1.0` produces a GitHub Release with `<id>-<version>.zip` attached and
+   prints the zip's `sha256`.
 
 2. **Add an entry to `plugins.json`** — append (never edit) your plugin:
 
