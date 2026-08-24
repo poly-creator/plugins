@@ -239,4 +239,7 @@ async function main() {
 	console.log(`validate-registry: ${plugins.length} entries OK`);
 }
 
-main().catch((err) => die(err instanceof Error ? err.message : String(err)));
+main().catch((err) => {
+	const cause = err instanceof Error && err.cause ? ` (${err.cause.message ?? err.cause})` : "";
+	die(`${err instanceof Error ? err.message : String(err)}${cause}`);
+});
