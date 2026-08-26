@@ -22,24 +22,29 @@
  *   - Download URLs are composed at read time, never stored.
  *   - `asset` filenames are NOT stored: latest mode uses the alias
  *     convention, pinned mode derives `<id>-<version>.zip` from the tag.
- *   - `official: true` is reserved for first-party repos (the registry
- *     validator restricts it to `bingryan/*` owners).
+ *   - First-party (`official`) status is derived from the repo owner
+ *     (`repo.startsWith("bingryan/")`); see {@link isOfficial}. Not stored,
+ *     so third-party entries can't claim the badge by accident.
  */
 import { z } from "zod";
-export declare const MAX_REGISTRY_CATEGORIES = 5;
-/** One registry entry — one plugin repo, in latest or pinned mode. */
+/** One registry entry — one plugin repo, in latest or pinned mode.
+ *
+ * Field set is intentionally Obsidian-parsimonious (the registry describes
+ * which GitHub repos host plugins, nothing more):
+ *   - id / name / author / repo: identifying four
+ *   - description: one-line tagline (long content lives in the repo's README)
+ *   - tag + sha256: optional, paired (both or neither) — exact pin to one
+ *     reviewed release for review-critical entries; absent = latest mode
+ *
+ * First-party marker is derived (see {@link isOfficial}), not stored. */
 export declare const REGISTRY_ENTRY_SCHEMA: z.ZodObject<{
     id: z.ZodString;
     name: z.ZodString;
     author: z.ZodString;
     repo: z.ZodString;
     description: z.ZodOptional<z.ZodString>;
-    categories: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    homepage: z.ZodOptional<z.ZodString>;
-    official: z.ZodOptional<z.ZodBoolean>;
     tag: z.ZodOptional<z.ZodString>;
     sha256: z.ZodOptional<z.ZodString>;
-    added_at: z.ZodString;
 }, z.core.$strip>;
 export type RegistryEntry = z.infer<typeof REGISTRY_ENTRY_SCHEMA>;
 /** The whole registry file: a schema version + the entry list. */
@@ -51,12 +56,8 @@ export declare const REGISTRY_SCHEMA: z.ZodObject<{
         author: z.ZodString;
         repo: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
-        categories: z.ZodOptional<z.ZodArray<z.ZodString>>;
-        homepage: z.ZodOptional<z.ZodString>;
-        official: z.ZodOptional<z.ZodBoolean>;
         tag: z.ZodOptional<z.ZodString>;
         sha256: z.ZodOptional<z.ZodString>;
-        added_at: z.ZodString;
     }, z.core.$strip>>;
 }, z.core.$strip>;
 export type RegistryManifest = z.infer<typeof REGISTRY_SCHEMA>;
@@ -65,6 +66,12 @@ export type RegistryManifest = z.infer<typeof REGISTRY_SCHEMA>;
 export declare function isPinnedEntry(entry: {
     tag?: unknown;
     sha256?: unknown;
+}): boolean;
+/** First-party derivation: any entry whose repo lives under the `bingryan/`
+ * GitHub org is OpenClime-maintained. Derived at read time so third-party
+ * entries cannot claim `official` status by lying in the registry file. */
+export declare function isOfficial(entry: {
+    repo: string;
 }): boolean;
 /**
  * Install URL for latest-mode entries: the versionless alias asset uploaded

@@ -22,8 +22,9 @@
  *   - Download URLs are composed at read time, never stored.
  *   - `asset` filenames are NOT stored: latest mode uses the alias
  *     convention, pinned mode derives `<id>-<version>.zip` from the tag.
- *   - `official: true` is reserved for first-party repos (the registry
- *     validator restricts it to `bingryan/*` owners).
+ *   - First-party (`official`) status is derived from the repo owner
+ *     (`repo.startsWith("bingryan/")`); see {@link isOfficial}. Not stored,
+ *     so third-party entries can't claim the badge by accident.
  */
 import { z } from "zod";
 import { SAFE_PLUGIN_ID } from "./safe-id.js";
@@ -34,28 +35,31 @@ const GITHUB_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const RELEASE_TAG = /^v\d+\.\d+\.\d+$/;
 /** Pinned zip digest — exactly 64 lowercase hex chars. */
 const SHA256_HEX = /^[a-f0-9]{64}$/;
-/** `added_at` — ISO 8601 datetime (no timezone offset required). */
-const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
-export const MAX_REGISTRY_CATEGORIES = 5;
-/** One registry entry — one plugin repo, in latest or pinned mode. */
+/** One registry entry — one plugin repo, in latest or pinned mode.
+ *
+ * Field set is intentionally Obsidian-parsimonious (the registry describes
+ * which GitHub repos host plugins, nothing more):
+ *   - id / name / author / repo: identifying four
+ *   - description: one-line tagline (long content lives in the repo's README)
+ *   - tag + sha256: optional, paired (both or neither) — exact pin to one
+ *     reviewed release for review-critical entries; absent = latest mode
+ *
+ * First-party marker is derived (see {@link isOfficial}), not stored. */
 export const REGISTRY_ENTRY_SCHEMA = z
     .object({
     id: z.string().max(64).regex(SAFE_PLUGIN_ID, "id must be a safe single path segment"),
     name: z.string().trim().min(1).max(100),
     author: z.string().trim().min(1).max(100),
     repo: z.string().regex(GITHUB_REPO, "repo must be owner/name"),
-    description: z.string().max(800).optional(),
-    categories: z.array(z.string().trim().min(1).max(32)).max(MAX_REGISTRY_CATEGORIES).optional(),
-    homepage: z.string().url().optional(),
-    /** First-party marker — the validator only allows it on bingryan/* repos. */
-    official: z.boolean().optional(),
+    description: z.string().trim().max(200).optional(),
     /** Pinned mode: exact release tag. Must pair with `sha256`. */
     tag: z.string().regex(RELEASE_TAG, "tag must be vX.Y.Z").optional(),
     /** Pinned mode: sha256 of the `<id>-<version>.zip` asset. Must pair with `tag`. */
     sha256: z.string().regex(SHA256_HEX, "sha256 must be 64 lowercase hex chars").optional(),
-    added_at: z.string().regex(ISO_DATETIME, "added_at must be an ISO 8601 datetime"),
 })
-    .refine((e) => (e.tag === undefined) === (e.sha256 === undefined), { message: "tag and sha256 must both be present (pinned) or both absent (latest)" });
+    .refine((e) => (e.tag === undefined) === (e.sha256 === undefined), {
+    message: "tag and sha256 must both be present (pinned) or both absent (latest)",
+});
 /** The whole registry file: a schema version + the entry list. */
 export const REGISTRY_SCHEMA = z.object({
     schema_version: z.literal(2),
@@ -65,6 +69,12 @@ export const REGISTRY_SCHEMA = z.object({
  * `releases/latest` mode. The one place the mode decision is made. */
 export function isPinnedEntry(entry) {
     return typeof entry.tag === "string";
+}
+/** First-party derivation: any entry whose repo lives under the `bingryan/`
+ * GitHub org is OpenClime-maintained. Derived at read time so third-party
+ * entries cannot claim `official` status by lying in the registry file. */
+export function isOfficial(entry) {
+    return entry.repo.startsWith("bingryan/");
 }
 /**
  * Install URL for latest-mode entries: the versionless alias asset uploaded

@@ -1,4 +1,12 @@
 {
 	"schema_version": 2,
-	"plugins": []
+	"plugins": [
+		{
+			"id": "example.color-tag",
+			"name": "Color Tag",
+			"author": "bingryan",
+			"repo": "bingryan/color-tag",
+			"description": "Tag a palette node with a category color so groups stand out on the canvas."
+		}
+	]
 }
