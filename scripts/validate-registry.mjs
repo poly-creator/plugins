@@ -32,7 +32,6 @@
  *   6. Unzipping yields a manifest passing MARKETPLACE_MANIFEST_SCHEMA,
  *      manifest.id == entry.id, and manifest.version == the release tag
  *      minus "v".
- *   6b. `official: true` is only allowed on bingryan/* first-party repos.
  *   7. `openclime-plugin-pack --check` re-validates the unpacked plugin
  *      (integrity derivation matches the desktop's).
  *   8. Entries declaring a nodeEntry are flagged for manual review (a
@@ -295,14 +294,11 @@ async function main() {
 		}
 	}
 
-	// Gates 4–8 per entry, mode-routed.
+	// Gates 4–8 per entry, mode-routed. `official` is derived at read time
+	// from `repo.startsWith("bingryan/")` (see isOfficial in
+	// @openclime/plugin-manifest) — the registry no longer carries the flag,
+	// so no gate is needed here.
 	for (const entry of plugins) {
-		// Gate 6b: `official` is a first-party marker — the registry only
-		// stamps it on bingryan/* repos. A third-party PR carrying it dies.
-		if (entry.official && !entry.repo.startsWith("bingryan/")) {
-			die(`[6b] entry "${entry.id}" claims official but repo ${entry.repo} is not a bingryan/* first-party repo`);
-		}
-
 		const { nodeEntry } = isPinnedEntry(entry)
 			? await verifyPinnedEntry(entry)
 			: await verifyLatestEntry(entry);

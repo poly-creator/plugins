@@ -6,8 +6,9 @@ this repo is just one static JSON file. Publishing a new version of your
 plugin never touches this repo again — tag `v*` in your plugin repo and
 every user's next install picks it up.
 
-First-party `official: true` entries also live here (bingryan/* repos
-only — CI rejects the flag anywhere else).
+First-party plugins (bingryan/* repos) are indistinguishable from
+third-party entries at the JSON level — readers derive `official` from
+`repo.startsWith("bingryan/")` so no third-party entry can lie about it.
 
 ## How to publish your plugin
 
@@ -29,17 +30,14 @@ only — CI rejects the flag anywhere else).
          "name": "My Plugin",
          "author": "your-github-username",
          "repo": "your-github-username/your-plugin-repo",
-         "description": "One-line description.",
-         "categories": ["utility"],
-         "added_at": "2026-08-23T00:00:00Z"
+         "description": "One-line description."
        }
      ]
    }
    ```
 
-   Optional fields: `homepage`, `official` (bingryan/* only). Optional
-   pinning: `tag` + `sha256` **together** (byte-locked to one reviewed
-   release; both or neither — CI rejects half a pin).
+   Optional pinning: `tag` + `sha256` **together** (byte-locked to one
+   reviewed release; both or neither — CI rejects half a pin).
 
 3. **Open a PR.** CI runs the machine gates (schema v2, uniqueness,
    additive-only diff with ownership, repo + latest-release alias assets,
