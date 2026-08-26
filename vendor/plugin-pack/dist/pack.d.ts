@@ -23,6 +23,12 @@
  *   5. Inject `manifest.integrity = "sha256:<hex>"` into the zip copy.
  *   6. Write the zip; report size, entry integrity, AND the zip's own sha256
  *      (the field the registry pins for tamper-evidence on GitHub releases).
+ *   7. Unless disabled, also write two versionless alias assets next to the
+ *      zip so GitHub's `releases/latest/download/` URLs stay constructible
+ *      without an API call: `<id>.zip` (byte copy of the versioned zip) and
+ *      `manifest.json` (the exact integrity-injected bytes shipped inside the
+ *      zip — what a version probe fetches). One plugin = one repo = one
+ *      latest release; the aliases are how `latest` stays nameable.
  */
 export interface PackArgs {
     /** Plugin directory (containing manifest.json or dist/manifest.json). */
@@ -31,6 +37,12 @@ export interface PackArgs {
     out?: string;
     /** Validate only — no zip is written. */
     check?: boolean;
+    /**
+     * Write the versionless alias assets (`<id>.zip` + `manifest.json`) next
+     * to the zip. Default ON — they are what `releases/latest/download/`
+     * URLs point at. `--no-aliases` opts out (e.g. local dev packs).
+     */
+    aliases?: boolean;
 }
 export interface PackSummary {
     ok: true;
@@ -47,6 +59,9 @@ export interface PackSummary {
     sha256?: string;
     /** Manifest integrity: `sha256:<hex>` over [main, nodeEntry?]. */
     integrity: string;
+    /** Alias asset paths — present in write mode with aliases enabled only. */
+    aliasZip?: string;
+    aliasManifest?: string;
 }
 /**
  * Locate the manifest. Mirrors desktop `locateManifestDir`: prefer the

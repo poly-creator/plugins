@@ -1,6 +1,6 @@
 {
 	"name": "@openclime/plugin-pack",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Pack an openclime plugin directory into a marketplace-ready zip — the reusable CLI behind scripts/pack-plugin.mjs. Third-party plugin repos `npx openclime-plugin-pack . --out dist` in their release workflow.",
 	"keywords": [
 		"cli",
@@ -13,7 +13,7 @@
 	"author": "OpenClime",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/openclime/openclime",
+		"url": "https://github.com/bingryan/openclime",
 		"directory": "packages/plugin-pack"
 	},
 	"bin": {

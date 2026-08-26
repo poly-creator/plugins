@@ -4,21 +4,35 @@
  *
  * Runs the same checks the desktop's install gate and the web's catalog
  * aggregation rely on, against the shared `@openclime/plugin-manifest`
- * package (REGISTRY_ENTRY_SCHEMA + MARKETPLACE_MANIFEST_SCHEMA) and the
- * shared `@openclime/plugin-pack` CLI. The goal: a PR that passes here is
+ * package (REGISTRY_SCHEMA v2 + MARKETPLACE_MANIFEST_SCHEMA) and the shared
+ * `@openclime/plugin-pack` CLI. The goal: a PR that passes here is
  * byte-consistent — a human then only reviews code semantics (REVIEW.md).
  *
+ * v2 entries are repo-level and dual-mode (one plugin = one repo = one
+ * `releases/latest`):
+ *   - latest (default, no tag/sha256): the author's release workflow uploads
+ *     THREE assets — `<id>-<version>.zip`, the byte-identical alias
+ *     `<id>.zip`, and `manifest.json` (the exact integrity-injected manifest
+ *     bytes from inside the zip). Trust = PR review + the in-zip integrity.
+ *   - pinned (`tag` + `sha256`, both or neither): the versioned
+ *     `<id>-<version>.zip` asset, byte-verified against the pin.
+ *
  * Gates (each one exits non-zero with a reason on failure):
- *   1. plugins.json parses + passes REGISTRY_SCHEMA (id safe, repo/tag/asset
- *      shape, sha256 exactly 64 lowercase hex, added_at ISO).
+ *   1. plugins.json parses + passes REGISTRY_SCHEMA v2 (id safe, repo shape,
+ *      tag+sha256 paired, added_at ISO).
  *   2. ids are unique across the whole file.
  *   3. Diff is additive-only: the PR must not modify entries it doesn't own
  *      (compares the merged base against the head via GitHub's PR API).
- *   4. The GitHub repo exists, the tag release exists, and the asset exists.
- *   5. The asset's downloaded bytes hash to the pinned sha256 (the critical
- *      tamper-evidence step — a release swapped after review is refused).
+ *   4. The GitHub repo exists and the right release + assets are there
+ *      (latest mode: `releases/latest` holds both alias assets; pinned mode:
+ *      the tag release holds the versioned asset).
+ *   5. Asset bytes verify — pinned mode: sha256 matches the pin; latest
+ *      mode: the `manifest.json` alias asset is byte-identical to the
+ *      manifest inside the alias zip (no drift between probe and install).
  *   6. Unzipping yields a manifest passing MARKETPLACE_MANIFEST_SCHEMA,
- *      manifest.id == entry.id, and manifest.version == tag minus "v".
+ *      manifest.id == entry.id, and manifest.version == the release tag
+ *      minus "v".
+ *   6b. `official: true` is only allowed on bingryan/* first-party repos.
  *   7. `openclime-plugin-pack --check` re-validates the unpacked plugin
  *      (integrity derivation matches the desktop's).
  *   8. Entries declaring a nodeEntry are flagged for manual review (a
@@ -32,12 +46,14 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { unzipSync, strToU8 } from "fflate";
+import { unzipSync } from "fflate";
 import {
 	REGISTRY_SCHEMA,
 	MARKETPLACE_MANIFEST_SCHEMA,
-	isSafePluginId,
-	entryFileOrder,
+	isPinnedEntry,
+	registryLatestZipUrl,
+	registryLatestManifestUrl,
+	registryPinnedUrl,
 } from "@openclime/plugin-manifest";
 
 const API = "https://api.github.com";
@@ -57,10 +73,14 @@ function die(msg, code = 1) {
 	process.exit(code);
 }
 
-async function gh(path, opts = {}) {
-	const res = await fetch(`${API}${path}`, { headers: HEADERS, ...opts });
-	if (!res.ok) return null;
-	return res.json();
+async function gh(pathname, opts = {}) {
+	try {
+		const res = await fetch(`${API}${pathname}`, { headers: HEADERS, ...opts });
+		if (!res.ok) return null;
+		return res.json();
+	} catch (err) {
+		die(`[4] GitHub API request failed for ${pathname}: ${err.message}`);
+	}
 }
 
 async function download(url) {
@@ -74,21 +94,10 @@ async function sha256Hex(bytes) {
 	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Gate 5 + 6 + 7: download → sha → unzip → manifest → pack --check. */
-async function verifyEntryAsset(entry) {
-	const assetUrl = `https://github.com/${entry.repo}/releases/download/${entry.tag}/${entry.asset}`;
-	const bytes = await download(assetUrl);
-	if (!bytes) throw new Error(`[5] asset download failed: ${assetUrl}`);
-
-	const actual = await sha256Hex(bytes);
-	if (actual !== entry.sha256) {
-		throw new Error(
-			`[5] sha256 mismatch: pinned ${entry.sha256}, downloaded ${actual} — ` +
-				"release bytes differ from what was reviewed",
-		);
-	}
-
-	const files = unzipSync(bytes);
+/** Unzip + MARKETPLACE_MANIFEST_SCHEMA + id/version match + pack --check
+ *  (gates 6–7 shared by both modes). `expectedVersion` is the release tag
+ *  minus "v" — both modes carry it (latest: from releases/latest). */
+async function verifyUnpacked(entry, files, expectedVersion) {
 	const manifestRaw = files["manifest.json"];
 	if (!manifestRaw) throw new Error("[6] zip has no manifest.json");
 	const manifest = JSON.parse(new TextDecoder().decode(manifestRaw));
@@ -104,10 +113,8 @@ async function verifyEntryAsset(entry) {
 	if (manifest.id !== entry.id) {
 		throw new Error(`[6] manifest.id "${manifest.id}" != entry.id "${entry.id}"`);
 	}
-	if (manifest.version !== entry.tag.replace(/^v/, "")) {
-		throw new Error(
-			`[6] manifest.version "${manifest.version}" != tag ${entry.tag} minus v`,
-		);
+	if (manifest.version !== expectedVersion) {
+		throw new Error(`[6] manifest.version "${manifest.version}" != release tag minus v (${expectedVersion})`);
 	}
 
 	// Gate 7: pack --check against the unpacked plugin. Write to temp so the
@@ -130,7 +137,80 @@ async function verifyEntryAsset(entry) {
 	} finally {
 		await rm(tmp, { recursive: true, force: true });
 	}
-	return { nodeEntry: manifest.nodeEntry };
+	return { nodeEntry: manifest.nodeEntry, manifestBytes: manifestRaw };
+}
+
+/** Latest mode (gates 4–7): both alias assets exist on `releases/latest`,
+ *  alias manifest == in-zip manifest, then the shared unpacked checks. */
+async function verifyLatestEntry(entry) {
+	// Gate 4: repo + latest release + both alias assets. The `releases/latest`
+	// REST endpoint only returns full (non-draft, non-prerelease) releases —
+	// a 404 here means "no full release yet", which is exactly what we want
+	// to refuse (the desktop's latest/download URL would 404 the same way).
+	const release = await gh(`/repos/${entry.repo}/releases/latest`);
+	if (!release) die(`[4] no full (non-draft/prerelease) release on ${entry.repo} — tag v* and publish one`);
+	const assetNames = new Set((release.assets ?? []).map((a) => a.name));
+	const aliasZipName = `${entry.id}.zip`;
+	if (!assetNames.has(aliasZipName)) {
+		die(`[4] latest release of ${entry.repo} is missing the alias asset "${aliasZipName}" (release workflow must upload all three assets)`);
+	}
+	if (!assetNames.has("manifest.json")) {
+		die(`[4] latest release of ${entry.repo} is missing the "manifest.json" alias asset (release workflow must upload all three assets)`);
+	}
+
+	// Download the alias zip through the EXACT URL the desktop will use.
+	const zipBytes = await download(registryLatestZipUrl(entry));
+	if (!zipBytes) throw new Error(`[5] alias zip download failed: ${registryLatestZipUrl(entry)}`);
+
+	const files = unzipSync(zipBytes);
+	const { nodeEntry, manifestBytes } = await verifyUnpacked(
+		entry,
+		files,
+		String(release.tag_name ?? "").replace(/^v/, ""),
+	);
+
+	// Gate 5 (latest mode): the standalone manifest.json alias asset must be
+	// byte-identical to the manifest inside the zip — otherwise the desktop's
+	// version probe and its install bytes disagree (alias drift).
+	const aliasManifest = await download(registryLatestManifestUrl(entry.repo));
+	if (!aliasManifest) throw new Error(`[5] manifest.json alias download failed: ${entry.repo}`);
+	if (Buffer.compare(Buffer.from(aliasManifest), Buffer.from(manifestBytes)) !== 0) {
+		throw new Error(
+			`[5] manifest.json alias asset differs from the manifest inside ${aliasZipName} — re-run the release workflow so both come from the same pack`,
+		);
+	}
+
+	return { nodeEntry };
+}
+
+/** Pinned mode (gates 4–7): the versioned asset, byte-verified against the
+ *  sha256 pin — the original tamper-evidence flow. */
+async function verifyPinnedEntry(entry) {
+	const assetUrl = registryPinnedUrl(entry);
+	// Gate 4: repo + tag release + derived asset name.
+	const repoMeta = await gh(`/repos/${entry.repo}`);
+	if (!repoMeta) die(`[4] repo not found: ${entry.repo}`);
+	const release = await gh(`/repos/${entry.repo}/releases/tags/${encodeURIComponent(entry.tag)}`);
+	if (!release) die(`[4] release tag not found: ${entry.repo}@${entry.tag}`);
+	const assetName = assetUrl.split("/").pop();
+	if (!release.assets?.some((a) => a.name === assetName)) {
+		die(`[4] asset not found: ${assetName} in ${entry.repo}@${entry.tag}`);
+	}
+
+	const bytes = await download(assetUrl);
+	if (!bytes) throw new Error(`[5] asset download failed: ${assetUrl}`);
+
+	const actual = await sha256Hex(bytes);
+	if (actual !== entry.sha256) {
+		throw new Error(
+			`[5] sha256 mismatch: pinned ${entry.sha256}, downloaded ${actual} — ` +
+				"release bytes differ from what was reviewed",
+		);
+	}
+
+	const files = unzipSync(bytes);
+	const { nodeEntry } = await verifyUnpacked(entry, files, entry.tag.replace(/^v/, ""));
+	return { nodeEntry };
 }
 
 async function main() {
@@ -215,18 +295,17 @@ async function main() {
 		}
 	}
 
-	// Gates 4–7 per entry.
+	// Gates 4–8 per entry, mode-routed.
 	for (const entry of plugins) {
-		// Gate 4: repo + tag + asset exist.
-		const repoMeta = await gh(`/repos/${entry.repo}`);
-		if (!repoMeta) die(`[4] repo not found: ${entry.repo}`);
-		const release = await gh(`/repos/${entry.repo}/releases/tags/${encodeURIComponent(entry.tag)}`);
-		if (!release) die(`[4] release tag not found: ${entry.repo}@${entry.tag}`);
-		if (!release.assets?.some((a) => a.name === entry.asset)) {
-			die(`[4] asset not found: ${entry.asset} in ${entry.repo}@${entry.tag}`);
+		// Gate 6b: `official` is a first-party marker — the registry only
+		// stamps it on bingryan/* repos. A third-party PR carrying it dies.
+		if (entry.official && !entry.repo.startsWith("bingryan/")) {
+			die(`[6b] entry "${entry.id}" claims official but repo ${entry.repo} is not a bingryan/* first-party repo`);
 		}
 
-		const { nodeEntry } = await verifyEntryAsset(entry);
+		const { nodeEntry } = isPinnedEntry(entry)
+			? await verifyPinnedEntry(entry)
+			: await verifyLatestEntry(entry);
 
 		// Gate 8: nodeEntry ⇒ manual review required. Exit code 2 (not 1) —
 		// validate.yml treats it as "label needs-manual-review", not failure.

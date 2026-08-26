@@ -13,14 +13,16 @@ import { fileURLToPath } from "node:url";
 import { packPlugin } from "./pack.js";
 function usage() {
     return [
-        "Usage: openclime-plugin-pack [dir] [--out <path>] [--check]",
-        "  dir      Plugin directory (default: .) containing manifest.json or dist/manifest.json",
-        "  --out    Output zip path (default: <dir>/release/<id>-<version>.zip)",
-        "  --check  Validate only — no zip is written.",
+        "Usage: openclime-plugin-pack [dir] [--out <path>] [--check] [--no-aliases]",
+        "  dir           Plugin directory (default: .) containing manifest.json or dist/manifest.json",
+        "  --out         Output zip path (default: <dir>/release/<id>-<version>.zip)",
+        "  --check       Validate only — no zip is written.",
+        "  --no-aliases  Skip the versionless <id>.zip + manifest.json alias assets",
+        "                (default: written next to the zip for releases/latest URLs)",
     ].join("\n");
 }
 function parseArgs(argv) {
-    const args = { dir: ".", check: false };
+    const args = { dir: ".", check: false, aliases: true };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--out" || a === "-o") {
@@ -31,6 +33,9 @@ function parseArgs(argv) {
         }
         else if (a === "--check") {
             args.check = true;
+        }
+        else if (a === "--no-aliases") {
+            args.aliases = false;
         }
         else if (a === "--help" || a === "-h") {
             console.log(usage());
@@ -75,8 +80,7 @@ export async function runCli(argv) {
 // give argv[1] a path containing a symlink component while import.meta.url
 // is the real location — a plain resolve() compare makes the bin a silent
 // no-op there.
-const isBin = process.argv[1] &&
-    realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
+const isBin = process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isBin) {
     process.exitCode = await runCli(process.argv.slice(2));
 }
