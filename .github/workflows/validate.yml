@@ -9,6 +9,9 @@
 name: validate
 
 on:
+  # Manual re-run: the push filter below only watches plugins.json, so a change
+  # to the validator itself cannot be exercised without this.
+  workflow_dispatch:
   pull_request:
     paths:
       - "plugins.json"
