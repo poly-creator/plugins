@@ -3,10 +3,10 @@
  * Registry validator — the machine gate behind `validate.yml`.
  *
  * Runs the same checks the desktop's install gate and the web's catalog
- * aggregation rely on, against the shared `@openclime/plugin-manifest`
- * package (REGISTRY_SCHEMA v2 + MARKETPLACE_MANIFEST_SCHEMA) and the shared
- * `@openclime/plugin-pack` CLI. The goal: a PR that passes here is
- * byte-consistent — a human then only reviews code semantics (REVIEW.md).
+ * aggregation rely on, against the published `@polycreator/plugin-manifest`
+ * package (REGISTRY_SCHEMA v2 + MARKETPLACE_MANIFEST_SCHEMA + the entry-hash
+ * helpers). The goal: a PR that passes here is byte-consistent — a human then
+ * only reviews code semantics (REVIEW.md).
  *
  * v2 entries are repo-level and dual-mode (one plugin = one repo = one
  * `releases/latest`):
@@ -32,8 +32,8 @@
  *   6. Unzipping yields a manifest passing MARKETPLACE_MANIFEST_SCHEMA,
  *      manifest.id == entry.id, and manifest.version == the release tag
  *      minus "v".
- *   7. `openclime-plugin-pack --check` re-validates the unpacked plugin
- *      (integrity derivation matches the desktop's).
+ *   7. The in-zip manifest's `integrity` matches the bytes it ships, computed
+ *      with the same helper the desktop's install gate uses.
  *   8. Entries declaring a nodeEntry are flagged for manual review (a
  *      main-process entry is full-trust on the desktop).
  *
@@ -41,22 +41,23 @@
  *   REGISTRY_REPO=owner/plugins validate-registry.mjs <path-to-plugins.json>
  *   REGISTRY_REPO=owner/plugins validate-registry.mjs --pr <pr-number>
  */
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import { unzipSync } from "fflate";
 import {
 	REGISTRY_SCHEMA,
 	MARKETPLACE_MANIFEST_SCHEMA,
+	digestEntryFiles,
+	entryFileOrder,
 	isPinnedEntry,
 	registryLatestZipUrl,
 	registryLatestManifestUrl,
 	registryPinnedUrl,
-} from "@openclime/plugin-manifest";
+} from "@polycreator/plugin-manifest";
 
 const API = "https://api.github.com";
-const UA = "openclime-plugins-registry/1.0";
+const UA = "polycreator-plugins-registry/1.0";
 const HEADERS = {
 	"User-Agent": UA,
 	Accept: "application/vnd.github+json",
@@ -116,25 +117,28 @@ async function verifyUnpacked(entry, files, expectedVersion) {
 		throw new Error(`[6] manifest.version "${manifest.version}" != release tag minus v (${expectedVersion})`);
 	}
 
-	// Gate 7: pack --check against the unpacked plugin. Write to temp so the
-	// shared CLI validates the exact bytes CI just verified. runCli is called
-	// programmatically (not via node_modules/.bin) — the bin shim is a shell
-	// script, unspawnable through process.execPath, and the package is a
-	// symlinked `file:` install anyway.
-	const tmp = await mkdtemp(path.join(os.tmpdir(), "registry-verify-"));
-	try {
-		for (const [name, data] of Object.entries(files)) {
-			const abs = path.join(tmp, name);
-			await mkdir(path.dirname(abs), { recursive: true });
-			await writeFile(abs, data);
-		}
-		const { runCli } = await import("@openclime/plugin-pack");
-		const code = await runCli([tmp, "--check"]);
-		if (code !== 0) {
-			throw new Error(`[7] openclime-plugin-pack --check failed for ${entry.id} (see stderr above)`);
-		}
-	} finally {
-		await rm(tmp, { recursive: true, force: true });
+	// Gate 7: the in-zip manifest's `integrity` must match the bytes it ships,
+	// computed with the same helper the desktop's verifyPluginIntegrity uses
+	// (`entryFileOrder` is the shared [main, nodeEntry?] order — a different
+	// order, or one extra file mixed in, silently produces a different digest).
+	// Accepts the bare hex form and the `sha256:` prefix, like the app does.
+	const declared = String(manifest.integrity ?? "").trim();
+	if (!declared) {
+		throw new Error(`[7] ${entry.id} declares no integrity — the registry requires it (the app tolerates its absence for a local install)`);
+	}
+	const expected = declared.startsWith("sha256:") ? declared.slice("sha256:".length) : declared;
+	if (!/^[a-f0-9]{64}$/.test(expected)) {
+		throw new Error(`[7] ${entry.id} declares a malformed integrity value: ${declared.slice(0, 40)}`);
+	}
+	const entryBytes = new Map();
+	for (const name of entryFileOrder(manifest)) {
+		const bytes = files[name];
+		if (!bytes) throw new Error(`[7] ${entry.id} declares "${name}" but the zip does not ship it`);
+		entryBytes.set(name, bytes);
+	}
+	const actual = await digestEntryFiles(manifest, entryBytes);
+	if (actual !== expected) {
+		throw new Error(`[7] integrity mismatch for ${entry.id}: manifest declares ${expected}, bytes hash to ${actual}`);
 	}
 	return { nodeEntry: manifest.nodeEntry, manifestBytes: manifestRaw };
 }
@@ -294,10 +298,9 @@ async function main() {
 		}
 	}
 
-	// Gates 4–8 per entry, mode-routed. `official` is derived at read time
-	// from `repo.startsWith("bingryan/")` (see isOfficial in
-	// @openclime/plugin-manifest) — the registry no longer carries the flag,
-	// so no gate is needed here.
+	// Gates 4–8 per entry, mode-routed. `official` is derived at read time from
+	// the entry's repo owner (see isOfficial in @polycreator/plugin-manifest) —
+	// the registry never carries the flag, so no gate is needed here.
 	for (const entry of plugins) {
 		const { nodeEntry } = isPinnedEntry(entry)
 			? await verifyPinnedEntry(entry)

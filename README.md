@@ -1,19 +1,19 @@
-# OpenClime Plugin Registry
+# PolyCreator Plugin Registry
 
-The official manifest of OpenClime plugins distributed **Obsidian-style**:
+The official manifest of PolyCreator plugins distributed **Obsidian-style**:
 one plugin = one GitHub repo, bytes hosted on the author's own releases,
 this repo is just one static JSON file. Publishing a new version of your
 plugin never touches this repo again — tag `v*` in your plugin repo and
 every user's next install picks it up.
 
-First-party plugins (bingryan/* repos) are indistinguishable from
-third-party entries at the JSON level — readers derive `official` from
-`repo.startsWith("bingryan/")` so no third-party entry can lie about it.
+First-party plugins (repos under the `poly-creator` organisation) are
+indistinguishable from third-party entries at the JSON level — readers derive
+`official` from the entry's repo owner, so no third-party entry can claim it.
 
 ## How to publish your plugin
 
 1. **Build + release it.** Use the
-   [`bingryan/plugin-template`](https://github.com/bingryan/plugin-template)
+   [`poly-creator/plugin-template`](https://github.com/poly-creator/plugin-template)
    template repo and follow its README: `git tag v0.1.0 && git push origin
    v0.1.0` produces a full GitHub Release with **three assets** —
    `<id>-<version>.zip`, the byte-identical alias `<id>.zip`, and the
@@ -71,6 +71,6 @@ third-party entries at the JSON level — readers derive `official` from
 ## Schema
 
 `plugins.json` shape is validated by `REGISTRY_SCHEMA` (v2) from
-`@openclime/plugin-manifest` — the same package the web catalog and the
-desktop marketplace use. Keep schema changes in lockstep with that
-package and both consumers.
+`@polycreator/plugin-manifest` — the same package the web catalog and the
+desktop marketplace use. Keep schema changes in lockstep with that package and
+both consumers.

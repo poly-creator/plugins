@@ -8,46 +8,30 @@ importers:
 
   .:
     dependencies:
-      '@openclime/plugin-manifest':
-        specifier: file:./vendor/plugin-manifest
-        version: file:vendor/plugin-manifest
-      '@openclime/plugin-pack':
-        specifier: file:./vendor/plugin-pack
-        version: file:vendor/plugin-pack
+      '@polycreator/plugin-manifest':
+        specifier: ^0.3.3
+        version: 0.3.3
       fflate:
         specifier: ^0.8.2
         version: 0.8.3
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
 
 packages:
 
-  '@openclime/plugin-manifest@file:vendor/plugin-manifest':
-    resolution: {directory: vendor/plugin-manifest, type: directory}
-
-  '@openclime/plugin-pack@file:vendor/plugin-pack':
-    resolution: {directory: vendor/plugin-pack, type: directory}
-    engines: {node: '>=20.0.0'}
-    hasBin: true
+  '@polycreator/plugin-manifest@0.3.3':
+    resolution: {integrity: sha512-DF806Fx6EWgurZMBfujyB/0eVc19ItSfl9wj36xpdCTo2zMTiJRZMB3rdUCTmsDlWGfP8CFatuDu7pckLksf1A==}
 
   fflate@0.8.3:
     resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
 snapshots:
 
-  '@openclime/plugin-manifest@file:vendor/plugin-manifest':
+  '@polycreator/plugin-manifest@0.3.3':
     dependencies:
-      zod: 4.4.3
-
-  '@openclime/plugin-pack@file:vendor/plugin-pack':
-    dependencies:
-      '@openclime/plugin-manifest': file:vendor/plugin-manifest
-      fflate: 0.8.3
+      zod: 4.6.7
 
   fflate@0.8.3: {}
 
-  zod@4.4.3: {}
+  zod@4.6.7: {}

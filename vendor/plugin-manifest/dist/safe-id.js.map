@@ -1,1 +1,0 @@
-{"version":3,"file":"safe-id.js","sourceRoot":"","sources":["../src/safe-id.ts"],"names":[],"mappings":"AAAA;;;;;;;;;;;;GAYG;AAEH,MAAM,CAAC,MAAM,cAAc,GAAG,oBAAoB,CAAC;AAEnD,2EAA2E;AAC3E,MAAM,UAAU,cAAc,CAAC,EAAU;IACxC,OAAO,cAAc,CAAC,IAAI,CAAC,EAAE,CAAC,IAAI,CAAC,EAAE,CAAC,QAAQ,CAAC,IAAI,CAAC,CAAC;AACtD,CAAC"}

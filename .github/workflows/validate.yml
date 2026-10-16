@@ -13,7 +13,8 @@ on:
     paths:
       - "plugins.json"
       - "scripts/**"
-      - "vendor/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - ".github/workflows/validate.yml"
   push:
     branches: [main]
@@ -30,13 +31,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
 
+      # The validator's dependency is the published @polycreator/plugin-manifest —
+      # the same package the desktop, the web catalog and plugin authors use, so
+      # the registry can no longer drift from a vendored copy.
       - name: Install
-        run: npm install --no-fund --no-audit
+        run: pnpm install --frozen-lockfile
 
       - name: Validate registry
         id: validate
