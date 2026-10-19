@@ -150,5 +150,24 @@ await Promise.all(
 	}),
 );
 
+// updatedAt is bookkeeping, not data: strip it (top-level + per row) before
+// comparing, so a run with zero data change writes nothing and produces no
+// commit. Commit time then means "data actually moved", which also keeps a
+// denser cron from spamming empty refresh commits.
+function dataOnly(snapshot) {
+	const { updatedAt: _top, ...rest } = snapshot;
+	const entries = {};
+	for (const [id, row] of Object.entries(rest.entries ?? {})) {
+		const { updatedAt: _row, ...data } = row;
+		entries[id] = data;
+	}
+	return { ...rest, entries };
+}
+
+if (JSON.stringify(dataOnly(out)) === JSON.stringify(dataOnly({ updatedAt: "", entries: prevEntries }))) {
+	console.log(`aggregate-stats: ${Object.keys(out.entries).length} entries, data unchanged — stats.json untouched`);
+	process.exit(0);
+}
+
 writeFileSync("stats.json", JSON.stringify(out, null, 2) + "\n");
 console.log(`aggregate-stats: ${Object.keys(out.entries).length} entries → stats.json`);
