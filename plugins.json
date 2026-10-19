@@ -1,12 +1,19 @@
 {
-	"schema_version": 2,
-	"plugins": [
-		{
-			"id": "example.color-tag",
-			"name": "Color Tag",
-			"author": "bingryan",
-			"repo": "bingryan/color-tag",
-			"description": "Tag a palette node with a category color so groups stand out on the canvas."
-		}
-	]
+  "schema_version": 2,
+  "plugins": [
+    {
+      "id": "example.color-tag",
+      "name": "Color Tag",
+      "author": "bingryan",
+      "repo": "bingryan/color-tag",
+      "description": "Tag a palette node with a category color so groups stand out on the canvas."
+    },
+    {
+      "id": "example.mist",
+      "name": "Mist",
+      "author": "PolyCreator",
+      "repo": "poly-creator/theme-mist",
+      "description": "Example theme family for theme authors: one cool-gray light theme and one matching dark theme."
+    }
+  ]
 }
