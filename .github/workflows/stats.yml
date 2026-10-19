@@ -1,0 +1,45 @@
+# Hourly stats aggregation → stats.json (committed).
+#
+# One GraphQL query fetches every registry repo's latest release (+assets)
+# in a single round trip. The web market reads stats.json off the raw CDN
+# (no auth, no quota) instead of hitting the GitHub API at request time.
+# The built-in GITHUB_TOKEN (5000 req/h) is plenty: one GraphQL call + one
+# manifest probe per entry per hour.
+on:
+  schedule:
+    - cron: "17 * * * *" # hourly, off the :00 rush
+  workflow_dispatch: # first run + manual refresh
+  push:
+    branches: [main]
+    paths:
+      - "plugins.json" # new entry → stats immediately, don't wait an hour
+
+permissions:
+  contents: write
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Aggregate stats
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/aggregate-stats.mjs
+
+      - name: Commit stats.json
+        run: |
+          git config user.name "polycreator-bot"
+          git config user.email "bot@polycreator.si"
+          git add stats.json
+          if git diff --cached --quiet; then
+            echo "stats unchanged — nothing to commit"
+          else
+            git commit -m "chore: hourly stats refresh" --no-verify
+            git push
+          fi
