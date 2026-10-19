@@ -77,6 +77,7 @@ for (const chunk of chunks) {
 					... on Repository {
 						nameWithOwner
 						stargazerCount
+						owner { avatarUrl }
 						latestRelease {
 							publishedAt
 							releaseAssets(first: 20) {
@@ -95,6 +96,7 @@ for (const chunk of chunks) {
 			publishedAt: node.latestRelease?.publishedAt ?? null,
 			assets,
 			stars: node.stargazerCount ?? null,
+			avatarUrl: node.owner?.avatarUrl ?? null,
 		});
 	}
 }
@@ -141,6 +143,7 @@ await Promise.all(
 			publishedAt: hit.publishedAt,
 			downloads,
 			stars: hit.stars,
+			avatarUrl: hit.avatarUrl ?? prev?.avatarUrl ?? null,
 			kind,
 			updatedAt: now,
 		};
