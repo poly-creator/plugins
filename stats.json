@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-19T11:20:33.794Z",
+  "updatedAt": "2026-10-19T15:34:39.247Z",
   "entries": {
     "example.mist": {
       "version": "0.1.0",
@@ -8,16 +8,16 @@
       "stars": 0,
       "avatarUrl": "https://avatars.githubusercontent.com/u/343547801?v=4",
       "kind": "theme",
-      "updatedAt": "2026-10-19T11:20:33.794Z"
+      "updatedAt": "2026-10-19T15:34:39.247Z"
     },
     "example.color-tag": {
       "version": "0.1.1",
       "publishedAt": "2026-08-26T11:27:17Z",
-      "downloads": 25,
+      "downloads": 26,
       "stars": 0,
       "avatarUrl": "https://avatars.githubusercontent.com/u/41174435?u=e9ac7e684c8293319d89a72bcb1199c74d1207f8&v=4",
       "kind": "plugin",
-      "updatedAt": "2026-10-19T11:20:33.794Z"
+      "updatedAt": "2026-10-19T15:34:39.247Z"
     }
   }
 }
