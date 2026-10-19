@@ -1,0 +1,21 @@
+{
+  "updatedAt": "2026-10-19T07:36:15.920Z",
+  "entries": {
+    "example.mist": {
+      "version": "0.1.0",
+      "publishedAt": "2026-10-19T05:19:40Z",
+      "downloads": 3,
+      "stars": 0,
+      "kind": "theme",
+      "updatedAt": "2026-10-19T07:36:15.920Z"
+    },
+    "example.color-tag": {
+      "version": "0.1.1",
+      "publishedAt": "2026-08-26T11:27:17Z",
+      "downloads": 25,
+      "stars": 0,
+      "kind": "plugin",
+      "updatedAt": "2026-10-19T07:36:15.920Z"
+    }
+  }
+}
