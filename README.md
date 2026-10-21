@@ -1,5 +1,9 @@
 # PolyCreator Plugin Registry
 
+> The marketplace this registry feeds: **https://polycreator.si** — browse the
+> [marketplace](https://polycreator.si/plugins) and read the
+> [author guide](https://polycreator.si/docs/publish).
+
 The official manifest of PolyCreator plugins distributed **Obsidian-style**:
 one plugin = one GitHub repo, bytes hosted on the author's own releases,
 this repo is just one static JSON file. Publishing a new version of your
