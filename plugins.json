@@ -14,6 +14,13 @@
       "author": "PolyCreator",
       "repo": "poly-creator/theme-mist",
       "description": "Example theme family for theme authors: one cool-gray light theme and one matching dark theme."
+    },
+    {
+      "id": "tonguesking.dusk",
+      "name": "Dusk",
+      "author": "tonguesking",
+      "repo": "tonguesking/theme-dusk",
+      "description": "Warm twilight theme family: a soft rose-on-paper light theme and a deep plum dark theme, both WCAG AA for text."
     }
   ]
 }
