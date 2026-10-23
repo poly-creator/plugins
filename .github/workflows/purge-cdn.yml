@@ -1,0 +1,28 @@
+# Purge jsDelivr's cache for registry files after they change on main.
+#
+# Desktop and web read plugins.json via cdn.jsdelivr.net/gh/…@main, which
+# jsDelivr may cache for up to 12h. A purge makes a merged entry visible
+# within seconds. The purge API is public and needs no token.
+#
+# stats.json is purged from stats.yml instead: its commits are pushed with
+# GITHUB_TOKEN, and those pushes never trigger other workflows.
+name: purge-cdn
+on:
+  push:
+    branches: [main]
+    paths:
+      - "plugins.json"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Purge jsDelivr
+        run: |
+          for f in plugins.json stats.json; do
+            curl -fsS --retry 3 "https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}@main/$f"
+            echo
+          done
