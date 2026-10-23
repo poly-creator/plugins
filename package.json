@@ -1,18 +1,18 @@
 {
-	"name": "polycreator-plugin-registry",
-	"private": true,
-	"version": "1.0.0",
-	"type": "module",
-	"description": "Official registry of PolyCreator plugins — plugins.json + CI validation gates.",
-	"scripts": {
-		"validate": "node scripts/validate-registry.mjs plugins.json"
-	},
-	"dependencies": {
-		"@polycreator/plugin-manifest": "^0.3.3",
-		"fflate": "^0.8.2"
-	},
-	"engines": {
-		"node": ">=20.0.0"
-	},
-	"packageManager": "pnpm@10.14.0"
+  "name": "polycreator-plugin-registry",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Official registry of PolyCreator plugins \u2014 plugins.json + CI validation gates.",
+  "scripts": {
+    "validate": "node scripts/validate-registry.mjs plugins.json"
+  },
+  "dependencies": {
+    "@polycreator/plugin-manifest": "^0.4.0",
+    "fflate": "^0.8.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@10.14.0"
 }

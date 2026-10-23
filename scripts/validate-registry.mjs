@@ -216,6 +216,60 @@ async function verifyPinnedEntry(entry) {
 	return { nodeEntry };
 }
 
+/**
+ * Gate 3 ownership check (pure — no I/O, no exit).
+ * Returns an array of failure messages (empty = pass).
+ *
+ * Rules:
+ * - new entry: submitter must own the repo (or be an org member for
+ *   org-owned official entries);
+ * - UNCHANGED entry (byte-identical JSON): skipped — an append-only PR
+ *   from another author must not fail on everyone else's rows (#283);
+ * - modified entry: no repo swap, and only an allowed submitter may
+ *   change it;
+ * - removals: only allowed submitters may remove.
+ */
+export function checkOwnership(base, head, submitter, orgMembers = new Set(), registryOrg = "") {
+	const errors = [];
+	const baseIds = new Map(base.map((p) => [p.id, p]));
+	const headIds = new Map(head.map((p) => [p.id, p]));
+	const ownerOf = (entry) => entry.repo.split("/")[0];
+	const isOfficialEntry = (entry) => registryOrg !== "" && ownerOf(entry) === registryOrg;
+	const maySubmit = (entry) =>
+		ownerOf(entry) === submitter || (isOfficialEntry(entry) && orgMembers.has(submitter));
+	for (const [id, headEntry] of headIds) {
+		const baseEntry = baseIds.get(id);
+		if (!baseEntry) {
+			if (!maySubmit(headEntry)) {
+				errors.push(
+					`[3] new entry "${id}" pins ${headEntry.repo} but PR is from @${submitter} — you may only submit entries for repos you own`,
+				);
+			}
+			continue;
+		}
+		if (JSON.stringify(headEntry) === JSON.stringify(baseEntry)) continue;
+		if (headEntry.repo !== baseEntry.repo) {
+			errors.push(
+				`[3] entry "${id}" changed repo (${baseEntry.repo} → ${headEntry.repo}) — modifying others' entries is not allowed`,
+			);
+			continue;
+		}
+		if (!maySubmit(baseEntry)) {
+			errors.push(
+				`[3] entry "${id}" belongs to ${baseEntry.repo} but PR is from @${submitter} — modifying others' entries is not allowed`,
+			);
+		}
+	}
+	for (const [id, baseEntry] of baseIds) {
+		if (!headIds.has(id) && !maySubmit(baseEntry)) {
+			errors.push(
+				`[3] PR removes "${id}" (repo ${baseEntry.repo}) owned by @${ownerOf(baseEntry)} — PR is from @${submitter}`,
+			);
+		}
+	}
+	return errors;
+}
+
 async function main() {
 	const argv = process.argv.slice(2);
 	const prFlag = argv.indexOf("--pr");
@@ -271,11 +325,9 @@ async function main() {
 		// legitimate external update. What we actually require: every
 		// plugin repo an entry touches belongs to the submitter.
 		const submitter = pr.user.login;
-		const ownerOf = (entry) => entry.repo.split("/")[0];
 		// Official entries (plugin repo under the registry's own org) may be
-		// submitted by any org member — the repo owner is the org itself, so
-		// the personal-ownership rule can never pass for them. Membership is
-		// checked live; non-members submitting org-owned repos still fail.
+		// submitted by any org member — membership is checked live;
+		// non-members submitting org-owned repos still fail.
 		const registryOrg = repo.split("/")[0];
 		const orgMembers = new Set();
 		try {
@@ -284,34 +336,7 @@ async function main() {
 		} catch {
 			// membership lookup failed — fall through to the strict rule
 		}
-		const isOfficialEntry = (entry) => ownerOf(entry) === registryOrg;
-		const maySubmit = (entry) =>
-			ownerOf(entry) === submitter || (isOfficialEntry(entry) && orgMembers.has(submitter));
-		for (const [id, headEntry] of headIds) {
-			const baseEntry = baseIds.get(id);
-			if (!baseEntry) {
-				// New entry: the submitter must own the plugin repo it pins
-				// (org members may submit org-owned official entries).
-				if (!maySubmit(headEntry)) {
-					die(`[3] new entry "${id}" pins ${headEntry.repo} but PR is from @${submitter} — you may only submit entries for repos you own`);
-				}
-				continue;
-			}
-			// Modified entry: no repo swap, and only the owning repo's author
-			// may change it.
-			if (headEntry.repo !== baseEntry.repo) {
-				die(`[3] entry "${id}" changed repo (${baseEntry.repo} → ${headEntry.repo}) — modifying others' entries is not allowed`);
-			}
-			if (!maySubmit(baseEntry)) {
-				die(`[3] entry "${id}" belongs to ${baseEntry.repo} but PR is from @${submitter} — modifying others' entries is not allowed`);
-			}
-		}
-		// Removals follow the same rule: you may only remove your own entries.
-		for (const [id, baseEntry] of baseIds) {
-			if (!headIds.has(id) && !maySubmit(baseEntry)) {
-				die(`[3] PR removes "${id}" (repo ${baseEntry.repo}) owned by @${ownerOf(baseEntry)} — PR is from @${submitter}`);
-			}
-		}
+		for (const err of checkOwnership([...baseIds.values()], [...headIds.values()], submitter, orgMembers, registryOrg)) die(err);
 	}
 
 	// Gates 4–8 per entry, mode-routed. `official` is derived at read time from
@@ -333,7 +358,11 @@ async function main() {
 	console.log(`validate-registry: ${plugins.length} entries OK`);
 }
 
-main().catch((err) => {
-	const cause = err instanceof Error && err.cause ? ` (${err.cause.message ?? err.cause})` : "";
-	die(`${err instanceof Error ? err.message : String(err)}${cause}`);
-});
+// Importable for tests: importing runs nothing. Direct execution
+// (node scripts/validate-registry.mjs …) runs the CLI.
+if (import.meta.url === `file://${process.argv[1]}`) {
+	main().catch((err) => {
+		const cause = err instanceof Error && err.cause ? ` (${err.cause.message ?? err.cause})` : "";
+		die(`${err instanceof Error ? err.message : String(err)}${cause}`);
+	});
+}
