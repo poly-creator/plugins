@@ -1,14 +1,14 @@
 {
-  "updatedAt": "2026-10-25T01:08:04.713Z",
+  "updatedAt": "2026-10-25T06:04:53.930Z",
   "entries": {
-    "tonguesking.dusk": {
-      "version": "0.1.0",
-      "publishedAt": "2026-10-23T11:24:44Z",
-      "downloads": 8,
+    "example.color-tag": {
+      "version": "0.1.1",
+      "publishedAt": "2026-08-26T11:27:17Z",
+      "downloads": 39,
       "stars": 0,
-      "avatarUrl": "https://avatars.githubusercontent.com/u/160130306?v=4",
-      "kind": "theme",
-      "updatedAt": "2026-10-25T01:08:04.713Z"
+      "avatarUrl": "https://avatars.githubusercontent.com/u/41174435?u=e9ac7e684c8293319d89a72bcb1199c74d1207f8&v=4",
+      "kind": "plugin",
+      "updatedAt": "2026-10-25T06:04:53.930Z"
     },
     "example.mist": {
       "version": "0.1.0",
@@ -17,16 +17,16 @@
       "stars": 0,
       "avatarUrl": "https://avatars.githubusercontent.com/u/343547801?v=4",
       "kind": "theme",
-      "updatedAt": "2026-10-25T01:08:04.713Z"
+      "updatedAt": "2026-10-25T06:04:53.930Z"
     },
-    "example.color-tag": {
-      "version": "0.1.1",
-      "publishedAt": "2026-08-26T11:27:17Z",
-      "downloads": 39,
+    "tonguesking.dusk": {
+      "version": "0.1.0",
+      "publishedAt": "2026-10-23T11:24:44Z",
+      "downloads": 8,
       "stars": 0,
-      "avatarUrl": "https://avatars.githubusercontent.com/u/41174435?u=e9ac7e684c8293319d89a72bcb1199c74d1207f8&v=4",
-      "kind": "plugin",
-      "updatedAt": "2026-10-25T01:08:04.713Z"
+      "avatarUrl": "https://avatars.githubusercontent.com/u/160130306?v=4",
+      "kind": "theme",
+      "updatedAt": "2026-10-25T06:04:53.930Z"
     }
   }
 }
